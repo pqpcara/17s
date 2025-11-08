@@ -1,0 +1,254 @@
+import Image from "next/image";
+import Badge from "@/components/Badge";
+import StatusIndicator from "@/components/StatusIndicator";
+import { type PresenceData } from "@/lib/presence";
+import { getActivityIconAsset } from "@/lib/activityIcons";
+
+function extractImageUrl(url: string): string {
+  if (url.startsWith("mp:external/")) {
+    const parts = url.split("https/");
+    return "https://" + parts[1];
+  }
+  if (url.startsWith("spotify:")) {
+    return `https://i.scdn.co/image/${url.split(":")[1]}`;
+  }
+  return url;
+}
+
+type DiscordBadge = { id: string; description?: string };
+
+const connectionIconMap: Record<string, string> = {
+  roblox:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Roblox_Corporation_2025_logo.svg/2048px-Roblox_Corporation_2025_logo.svg.png",
+  steam:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/2048px-Steam_icon_logo.svg.png",
+  spotify:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Spotify_icon.svg/512px-Spotify_icon.svg.png?20220821125323",
+  youtube:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/512px-YouTube_full-color_icon_%282017%29.svg.png?20240107144800",
+  twitch: "https://www.vectorlogo.zone/logos/twitch/twitch-tile.svg",
+  twitter:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Logo_of_Twitter.svg/1245px-Logo_of_Twitter.svg.png",
+  github:
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcScfGAZaK1UapejlsFxp9IHSRn5zA5F5fC76biETiGI7bJvI06XdqRKc7wup8lMzSRvzJg&usqp=CAU",
+  reddit: "https://cdn.discordapp.com/app-assets/reddit/reddit.png",
+  instagram:
+    "https://img.freepik.com/vetores-gratis/instagram-logo_1199-122.jpg",
+  facebook:
+    "https://static.vecteezy.com/ti/vetor-gratis/p1/2000431-facebook-logo-icone-vetorial-gratis-vector.jpg",
+  snapchat:
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
+  tiktok:
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
+  linkedin:
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
+  epicgames:
+    "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/i/bde3849f-8b50-46e6-92fa-06b89b73054a/dc46lkq-0901a30c-e2bb-48f6-a907-692da50cd104.png/v1/fill/w_256,h_256,q_80,strp/epic_games_launcher___token_icon_light_by_flexo013_dc46lkq-fullview.jpg",
+  xbox: "https://cms-assets.xboxservices.com/assets/be/ba/bebae3aa-b1d4-4574-bda7-e29e0da79acc.jpg?n=Xbox-on-TVs_Sharing_200x200.jpg",
+  playstation:
+    "https://i.pinimg.com/736x/28/68/9a/28689a40d979ebb1d751814d4ce6a0e1.jpg",
+  battle_net: "https://cdn.discordapp.com/app-assets/battlenet/battlenet.png",
+  riot: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
+  ubisoft:
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
+  ea: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
+};
+
+function getConnectionIcon(type: string): string {
+  return connectionIconMap[type.toLowerCase()] || "/window.svg";
+}
+
+export type DiscordProfile = {
+  user: {
+    id: string;
+    username: string;
+    global_name: string | null;
+    avatar: string | null;
+    discriminator: string;
+    bio?: string;
+  };
+  user_profile: {
+    bio?: string;
+    pronouns?: string | "";
+  };
+  badges: DiscordBadge[];
+  premium_type?: number;
+  connected_accounts?: {
+    type: string;
+    id: string;
+    name?: string;
+    verified?: boolean;
+  }[];
+};
+
+export default function ProfileCard({
+  profile,
+  presence,
+  onOpenModal,
+}: {
+  profile: DiscordProfile;
+  presence?: PresenceData;
+  onOpenModal?: (data: {
+    activities: PresenceData["activities"];
+    connections?: DiscordProfile["connected_accounts"];
+  }) => void;
+}) {
+  const { user, user_profile, badges } = profile;
+  const pronouns = user_profile?.pronouns ?? "";
+  const displayName = user.global_name ?? user.username;
+  const avatarUrl = user.avatar
+    ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=256`
+    : "/avatar_placeholder.png";
+  const status: "online" | "idle" | "dnd" | "offline" =
+    presence?.discord_status ?? "offline";
+  const statusMaskOutline = "outline outline-2 outline-zinc-900";
+
+  return (
+    <div className="glass rounded-xl p-5 w-full sm:w-[420px] flex-shrink-0 border border-white/10 shadow-xl hover:shadow-2xl transition-shadow">
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <Image
+            src={avatarUrl}
+            alt={displayName}
+            width={72}
+            height={72}
+            className="rounded-full border border-white/10"
+          />
+          <span
+            className={`absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 inline-flex items-center justify-center rounded-full ${statusMaskOutline} bg-zinc-900 pointer-events-none`}
+            style={{ width: 18, height: 18 }}
+          >
+            <StatusIndicator status={status} size={14} />
+          </span>
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-white font-semibold truncate">{displayName}</h2>
+          <p className="text-xs text-zinc-400 truncate">
+            @{user.username}{" "}
+            <span className="text-zinc-300 truncate">
+              {user_profile.pronouns !== "" ? "| " : ""}
+            </span>
+            <span className="text-zinc-350 truncate">
+              {user_profile.pronouns !== "" ? user_profile.pronouns : ""}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      {badges?.length ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {badges.map((b) => (
+            <Badge key={b.id} id={b.id} title={b.description || ""} />
+          ))}
+        </div>
+      ) : null}
+      {user.bio ? (
+        <p className="mt-4 text-sm text-zinc-300 line-clamp-3">{user.bio}</p>
+      ) : null}
+
+      {presence?.activities?.length ? (
+        <div className="mt-4 space-y-2">
+          {presence.activities.slice(0, 2).map((activity) => (
+            <div
+              key={activity.id}
+              className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
+            >
+              <div className="h-9 w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden">
+                <Image
+                  src={extractImageUrl(
+                    activity.assets?.large_image ||
+                      activity.assets?.small_image ||
+                      getActivityIconAsset(activity) ||
+                      "/window.svg",
+                  )}
+                  alt={activity.name}
+                  width={48}
+                  height={48}
+                  className="block w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "/window.svg";
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm text-white truncate">
+                  {activity.name}
+                </div>
+                <div className="text-xs text-zinc-300/80 truncate">
+                  {activity.details || activity.state || "Atividade"}
+                </div>
+              </div>
+              {onOpenModal && presence.activities.length > 2 && (
+                <button
+                  onClick={() =>
+                    onOpenModal({ activities: presence.activities })
+                  }
+                  className="ml-auto text-xs px-2 py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200"
+                >
+                  Ver mais
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-zinc-400">
+          Nenhuma atividade
+        </div>
+      )}
+
+      {profile.connected_accounts?.length ? (
+        <div className="mt-4 space-y-2">
+          {(() => {
+            const uniqueConnections = profile.connected_accounts.filter(
+              (connection, index, arr) =>
+                arr.findIndex((c) => c.type === connection.type) === index,
+            );
+            return uniqueConnections.slice(0, 2).map((c) => (
+              <div
+                key={`${c.type}:${c.id}`}
+                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
+              >
+                <div className="h-9 w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden">
+                  <Image
+                    src={getConnectionIcon(c.type)}
+                    alt={c.type}
+                    width={48}
+                    height={48}
+                    className="block w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "/window.svg";
+                    }}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm text-white truncate">
+                    {c.name || c.id}
+                  </div>
+                  <div className="text-xs text-zinc-300/80 truncate">
+                    Conexão
+                  </div>
+                </div>
+                {onOpenModal && uniqueConnections.length > 2 && (
+                  <button
+                    onClick={() =>
+                      onOpenModal({
+                        activities: presence?.activities ?? [],
+                        connections: uniqueConnections,
+                      })
+                    }
+                    className="ml-auto text-xs px-2 py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200"
+                  >
+                    Ver mais
+                  </button>
+                )}
+              </div>
+            ));
+          })()}
+        </div>
+      ) : null}
+    </div>
+  );
+}
