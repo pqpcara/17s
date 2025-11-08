@@ -284,8 +284,6 @@ export class PresenceHub {
                 activities: d.activities ?? [],
               };
 
-              console.log(d.activities);
-
               if (d.activities) {
                 const activityImages = d.activities.map((activity) => ({
                   large_image: activity.assets?.large_image,
