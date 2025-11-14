@@ -38,7 +38,7 @@ function getConnectionIcon(type: string): string {
 }
 
 export default function Home() {
-  const ids = useMemo(() => ["1212042152402755585", "1051989185659154442", "1408350346039918634"], []);
+  const ids = useMemo(() => ["1212042152402755585", "1051989185659154442", "1408350346039918634", "1424752743901564938"], []);
   const [entered, setEntered] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, DiscordProfile>>({});
   const [presence, setPresence] = useState<Record<string, PresenceData>>({});
