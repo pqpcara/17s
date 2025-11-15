@@ -3,6 +3,7 @@ import Badge from "@/components/Badge";
 import StatusIndicator from "@/components/StatusIndicator";
 import { type PresenceData } from "@/lib/presence";
 import { getActivityIconAsset } from "@/lib/activityIcons";
+import { ReactNode } from "react";
 
 function extractImageUrl(url: string): string {
   if (url.startsWith("mp:external/")) {
@@ -54,8 +55,137 @@ const connectionIconMap: Record<string, string> = {
   ea: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7wIlVFnJuESp4wirO8T5Zv49mjumK15aRNaXdNX-MdxkdttemDucJUOjUdm5lpZEJ9b0&usqp=CAU",
 };
 
-function getConnectionIcon(type: string): string {
+function getConnectionIcon(type: string, icon?: string): string {
+  if (icon) return icon;
   return connectionIconMap[type.toLowerCase()] || "/window.svg";
+}
+
+function processBioText(text: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const emojiRegex = /<(a?):(\w+):(\d+)>/g;
+  
+  type MatchData = {
+    type: 'emoji' | 'url';
+    start: number;
+    end: number;
+    data: {
+      animated?: boolean;
+      name?: string;
+      id?: string;
+      fullMatch?: string;
+      url?: string;
+    };
+  };
+  
+  const allMatches: MatchData[] = [];
+  
+  let match: RegExpExecArray | null;
+  while ((match = emojiRegex.exec(text)) !== null) {
+    allMatches.push({
+      type: 'emoji',
+      start: match.index,
+      end: match.index + match[0].length,
+      data: {
+        animated: match[1] === 'a',
+        name: match[2],
+        id: match[3],
+        fullMatch: match[0]
+      }
+    });
+  }
+  
+  urlRegex.lastIndex = 0;
+  while ((match = urlRegex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    const matchLength = match[0].length;
+    const isInsideEmoji = allMatches.some(m => 
+      m.type === 'emoji' && matchIndex >= m.start && matchIndex < m.end
+    );
+    const overlapsMatch = allMatches.some(m => 
+      (matchIndex >= m.start && matchIndex < m.end) ||
+      (m.start >= matchIndex && m.start < matchIndex + matchLength)
+    );
+    if (!isInsideEmoji && !overlapsMatch) {
+      allMatches.push({
+        type: 'url',
+        start: matchIndex,
+        end: matchIndex + matchLength,
+        data: { url: match[0] }
+      });
+    }
+  }
+  
+  allMatches.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return a.type === 'emoji' ? -1 : 1;
+  });
+  
+  const filteredMatches: MatchData[] = [];
+  for (const match of allMatches) {
+    const isInsideOther = filteredMatches.some(m => 
+      match.start >= m.start && match.end <= m.end &&
+      !(match.start === m.start && match.end === m.end)
+    );
+    if (!isInsideOther) {
+      filteredMatches.push(match);
+    }
+  }
+  
+  let currentIndex = 0;
+  
+  for (const item of filteredMatches) {
+    if (item.start > currentIndex) {
+      const beforeText = text.slice(currentIndex, item.start);
+      if (beforeText) {
+        parts.push(<span key={`text-${currentIndex}`}>{beforeText}</span>);
+      }
+    }
+    
+    if (item.type === 'emoji') {
+      const emojiUrl = item.data.animated
+        ? `https://cdn.discordapp.com/emojis/${item.data.id}.gif`
+        : `https://cdn.discordapp.com/emojis/${item.data.id}.png`;
+      parts.push(
+        <Image
+          key={`emoji-${item.start}`}
+          src={emojiUrl}
+          alt={item.data.name || "emoji"}
+          width={18}
+          height={18}
+          className="inline-block align-middle mx-0.5"
+          unoptimized
+        />
+      );
+    } else if (item.type === 'url') {
+      parts.push(
+        <a
+          key={`url-${item.start}`}
+          href={item.data.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-700 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-400 underline break-all"
+        >
+          {item.data.url}
+        </a>
+      );
+    }
+    
+    currentIndex = item.end;
+  }
+  
+  if (currentIndex < text.length) {
+    const remainingText = text.slice(currentIndex);
+    if (remainingText) {
+      parts.push(<span key={`text-${currentIndex}`}>{remainingText}</span>);
+    }
+  }
+  
+  if (parts.length === 0) {
+    return [<span key="text-0">{text}</span>];
+  }
+  
+  return parts;
 }
 
 export type DiscordProfile = {
@@ -78,6 +208,7 @@ export type DiscordProfile = {
     id: string;
     name?: string;
     verified?: boolean;
+    icon?: string;
   }[];
 };
 
@@ -94,25 +225,35 @@ export default function ProfileCard({
   }) => void;
 }) {
   const { user, user_profile, badges } = profile;
-  const pronouns = user_profile?.pronouns ?? "";
-  const displayName = user.global_name ?? user.username;
-  const avatarUrl = user.avatar
-    ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=256`
-    : "/avatar_placeholder.png";
+
+  const displayName = presence?.discord_user?.global_name 
+    ?? presence?.discord_user?.username 
+    ?? user.global_name 
+    ?? user.username;
+  
+  const username = presence?.discord_user?.username ?? user.username;
+  
+  const presenceUserId = presence?.discord_user?.id ?? user.id;
+  const avatarHash = presence?.discord_user?.avatar ?? user.avatar;
+  const avatarUrl = avatarHash
+    ? `https://cdn.discordapp.com/avatars/${presenceUserId}/${avatarHash}.png?size=256`
+    : `https://cdn.discordapp.com/embed/avatars/${parseInt(presenceUserId) % 5}.png`;
+  
   const status: "online" | "idle" | "dnd" | "offline" =
     presence?.discord_status ?? "offline";
   const statusMaskOutline = "outline outline-2 outline-zinc-900";
 
   return (
-    <div className="glass rounded-xl p-5 w-full sm:w-[420px] flex-shrink-0 border border-white/10 shadow-xl hover:shadow-2xl transition-shadow">
-      <div className="flex items-center gap-4">
-        <div className="relative">
+    <div className="glass rounded-xl p-4 sm:p-5 w-full border border-white/10 shadow-xl hover:shadow-2xl transition-shadow max-w-full">
+      <div className="flex items-center gap-3 sm:gap-4">
+        <div className="relative flex-shrink-0">
           <Image
+            key={`avatar-${presenceUserId}-${avatarHash || 'default'}`}
             src={avatarUrl}
             alt={displayName}
             width={72}
             height={72}
-            className="rounded-full border border-white/10"
+            className="rounded-full border border-white/10 w-14 h-14 sm:w-[72px] sm:h-[72px]"
           />
           <span
             className={`absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 inline-flex items-center justify-center rounded-full ${statusMaskOutline} bg-zinc-900 pointer-events-none`}
@@ -121,39 +262,41 @@ export default function ProfileCard({
             <StatusIndicator status={status} size={14} />
           </span>
         </div>
-        <div className="min-w-0">
-          <h2 className="text-white font-semibold truncate">{displayName}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-white font-semibold truncate text-sm sm:text-base">{displayName}</h2>
           <p className="text-xs text-zinc-400 truncate">
-            @{user.username}{" "}
-            <span className="text-zinc-300 truncate">
-              {user_profile.pronouns !== "" ? "| " : ""}
-            </span>
-            <span className="text-zinc-350 truncate">
-              {user_profile.pronouns !== "" ? user_profile.pronouns : ""}
-            </span>
+            @{username}{" "}
+            {user_profile.pronouns !== "" && (
+              <>
+                <span className="text-zinc-300">| </span>
+                <span className="text-zinc-300">{user_profile.pronouns}</span>
+              </>
+            )}
           </p>
         </div>
       </div>
 
       {badges?.length ? (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2">
           {badges.map((b) => (
             <Badge key={b.id} id={b.id} title={b.description || ""} />
           ))}
         </div>
       ) : null}
-      {user.bio ? (
-        <p className="mt-4 text-sm text-zinc-300 line-clamp-3">{user.bio}</p>
+      {(user.bio || user_profile?.bio) ? (
+        <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-zinc-300 line-clamp-3 leading-relaxed">
+          {processBioText(user.bio || user_profile?.bio || "")}
+        </p>
       ) : null}
 
       {presence?.activities?.length ? (
-        <div className="mt-4 space-y-2">
+        <div className="mt-3 sm:mt-4 space-y-2">
           {presence.activities.slice(0, 2).map((activity) => (
             <div
               key={activity.id}
-              className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
+              className="flex items-center gap-2 sm:gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
             >
-              <div className="h-9 w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden">
+              <div className="h-8 w-8 sm:h-9 sm:w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
                 <Image
                   src={extractImageUrl(
                     activity.assets?.large_image ||
@@ -171,11 +314,11 @@ export default function ProfileCard({
                   }}
                 />
               </div>
-              <div className="min-w-0">
-                <div className="text-sm text-white truncate">
+              <div className="min-w-0 flex-1">
+                <div className="text-xs sm:text-sm text-white truncate">
                   {activity.name}
                 </div>
-                <div className="text-xs text-zinc-300/80 truncate">
+                <div className="text-[10px] sm:text-xs text-zinc-300/80 truncate">
                   {activity.details || activity.state || "Atividade"}
                 </div>
               </div>
@@ -184,7 +327,7 @@ export default function ProfileCard({
                   onClick={() =>
                     onOpenModal({ activities: presence.activities })
                   }
-                  className="ml-auto text-xs px-2 py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200"
+                  className="ml-auto text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
                 >
                   Ver mais
                 </button>
@@ -193,13 +336,13 @@ export default function ProfileCard({
           ))}
         </div>
       ) : (
-        <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-zinc-400">
+        <div className="mt-3 sm:mt-4 rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3 text-[10px] sm:text-xs text-zinc-400">
           Nenhuma atividade
         </div>
       )}
 
       {profile.connected_accounts?.length ? (
-        <div className="mt-4 space-y-2">
+        <div className="mt-3 sm:mt-4 space-y-2">
           {(() => {
             const uniqueConnections = profile.connected_accounts.filter(
               (connection, index, arr) =>
@@ -208,26 +351,26 @@ export default function ProfileCard({
             return uniqueConnections.slice(0, 2).map((c) => (
               <div
                 key={`${c.type}:${c.id}`}
-                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
+                className="flex items-center gap-2 sm:gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
               >
-                <div className="h-9 w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden">
+                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
                   <Image
-                    src={getConnectionIcon(c.type)}
+                    src={getConnectionIcon(c.type, c.icon)}
                     alt={c.type}
                     width={48}
                     height={48}
                     className="block w-full h-full object-cover"
                     loading="lazy"
                     onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = "/window.svg";
+                      (e.currentTarget as HTMLImageElement).src = getConnectionIcon(c.type);
                     }}
                   />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-sm text-white truncate">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs sm:text-sm text-white truncate">
                     {c.name || c.id}
                   </div>
-                  <div className="text-xs text-zinc-300/80 truncate">
+                  <div className="text-[10px] sm:text-xs text-zinc-300/80 truncate">
                     Conexão
                   </div>
                 </div>
@@ -239,7 +382,7 @@ export default function ProfileCard({
                         connections: uniqueConnections,
                       })
                     }
-                    className="ml-auto text-xs px-2 py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200"
+                    className="ml-auto text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
                   >
                     Ver mais
                   </button>

@@ -19,13 +19,24 @@
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
+  overflow-x: hidden;
 }
 
 .glass {
   background: rgba(15, 15, 15, 0.35);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 640px) {
+  .glass {
+    background: rgba(15, 15, 15, 0.5);
+  }
 }

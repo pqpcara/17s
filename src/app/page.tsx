@@ -27,10 +27,11 @@ const connectionIconMap: Record<string, string> = {
   xbox: "https://cms-assets.xboxservices.com/assets/be/ba/bebae3aa-b1d4-4574-bda7-e29e0da79acc.jpg?n=Xbox-on-TVs_Sharing_200x200.jpg",
   playstation:
     "https://i.pinimg.com/736x/28/68/9a/28689a40d979ebb1d751814d4ce6a0e1.jpg",
-  x: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStLVUTyhzUJjfZZmRuxdiRr0twncA4eM_NAFxTcLw3JfsRIZf5Inx5CjyOOkLNf7MVscg&usqp=CAU",
+  x: "https://abs.twimg.com/favicons/twitter.3.ico",
 };
 
-function getConnectionIcon(type: string): string {
+function getConnectionIcon(type: string, icon?: string): string {
+  if (icon) return icon;
   return (
     connectionIconMap[type.toLowerCase()] ||
     "https://static.vecteezy.com/system/resources/previews/023/741/147/non_2x/discord-logo-icon-social-media-icon-free-png.png"
@@ -38,7 +39,7 @@ function getConnectionIcon(type: string): string {
 }
 
 export default function Home() {
-  const ids = useMemo(() => ["1212042152402755585", "1051989185659154442"], []);
+  const ids = useMemo(() => ["1212042152402755585", "1051989185659154442", "1408350346039918634", "1424752743901564938"], []);
   const [entered, setEntered] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, DiscordProfile>>({});
   const [presence, setPresence] = useState<Record<string, PresenceData>>({});
@@ -49,6 +50,7 @@ export default function Home() {
       id: string;
       name?: string;
       verified?: boolean;
+      icon?: string;
     }[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,12 +97,12 @@ export default function Home() {
   }, [entered, ids]);
 
   return (
-    <div className="min-h-screen w-full bg-black/90 flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen w-full bg-black/90 flex items-center justify-center p-3 sm:p-4 md:p-6 relative overflow-hidden">
       {!entered ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <button
             onClick={() => setEntered(true)}
-            className="px-6 py-3 rounded-xl bg-black text-white font-medium shadow-lg hover:bg-purple-500 transition"
+            className="px-4 sm:px-6 py-2 sm:py-3 rounded-xl bg-black text-white text-sm sm:text-base font-medium shadow-lg hover:bg-purple-500 transition"
           >
             Clique para entrar
           </button>
@@ -108,29 +110,29 @@ export default function Home() {
       ) : null}
 
       <div
-        className={`w-full max-w-4xl transition-opacity ${entered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`w-full transition-opacity ${entered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
         {error ? (
-          <div className="text-red-400 text-sm break-all mb-4">{error}</div>
+          <div className="text-red-400 text-xs sm:text-sm break-all mb-3 sm:mb-4 max-w-7xl mx-auto">{error}</div>
         ) : null}
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-center gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 items-start w-full max-w-7xl mx-auto">
           {ids.map((id) => {
             const p = profiles[id];
             if (!p) {
               return (
                 <div
                   key={id}
-                  className="glass rounded-xl p-5 w-full sm:w-[420px] border border-white/10 animate-pulse"
+                  className="glass rounded-xl p-4 sm:p-5 w-full border border-white/10 animate-pulse"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="h-[72px] w-[72px] rounded-full bg-zinc-800" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-40 bg-zinc-800 rounded" />
-                      <div className="h-3 w-24 bg-zinc-800 rounded" />
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="h-14 w-14 sm:h-[72px] sm:w-[72px] rounded-full bg-zinc-800 flex-shrink-0" />
+                    <div className="flex-1 space-y-2 min-w-0">
+                      <div className="h-4 w-32 sm:w-40 bg-zinc-800 rounded" />
+                      <div className="h-3 w-20 sm:w-24 bg-zinc-800 rounded" />
                     </div>
                   </div>
-                  <div className="mt-4 h-8 bg-zinc-900/50 rounded" />
+                  <div className="mt-3 sm:mt-4 h-8 bg-zinc-900/50 rounded" />
                 </div>
               );
             }
@@ -146,43 +148,43 @@ export default function Home() {
         </div>
         {modal ? (
           <div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 flex items-center justify-center p-3 sm:p-4 z-50"
             onClick={() => setModal(null)}
           >
             <div
-              className="glass rounded-xl p-5 w-full max-w-md border border-white/10"
+              className="glass rounded-xl p-4 sm:p-5 w-full max-w-md border border-white/10 max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">Atividades</h3>
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <h3 className="text-white font-semibold text-sm sm:text-base">Atividades</h3>
                 <button
-                  className="text-zinc-300 hover:text-white"
+                  className="text-zinc-300 hover:text-white text-sm sm:text-base"
                   onClick={() => setModal(null)}
                 >
                   Fechar
                 </button>
               </div>
-              <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2 sm:space-y-3 max-h-[60vh] overflow-y-auto flex-1">
                 {modal.activities.map((a) => (
                   <div
                     key={a.id}
-                    className="rounded-lg border border-white/10 bg-white/5 p-3"
+                    className="rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3"
                   >
-                    <div className="text-sm text-white">{a.name}</div>
-                    <div className="text-xs text-zinc-300/80">
+                    <div className="text-xs sm:text-sm text-white">{a.name}</div>
+                    <div className="text-[10px] sm:text-xs text-zinc-300/80">
                       {a.details || a.state || "Atividade"}
                     </div>
                     {a.assets?.large_image ? (
-                      <div className="mt-2 text-xs text-zinc-400">
+                      <div className="mt-2 text-[10px] sm:text-xs text-zinc-400">
                         {a.assets.large_text}
                       </div>
                     ) : null}
                     {a.buttons?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
                         {a.buttons.map((b, i) => (
                           <span
                             key={i}
-                            className="text-[11px] px-2 py-1 rounded bg-zinc-800/70 text-zinc-200"
+                            className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 text-zinc-200"
                           >
                             {b}
                           </span>
@@ -192,28 +194,28 @@ export default function Home() {
                   </div>
                 ))}
                 {modal.connections?.length ? (
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                    <div className="text-sm text-white mb-2">Conexões</div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3">
+                    <div className="text-xs sm:text-sm text-white mb-2">Conexões</div>
                     <div className="space-y-2">
                       {modal.connections.map((c) => (
                         <div
                           key={`${c.type}:${c.id}`}
-                          className="flex items-center gap-3"
+                          className="flex items-center gap-2 sm:gap-3"
                         >
-                          <div className="h-8 w-8 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden">
+                          <div className="h-7 w-7 sm:h-8 sm:w-8 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
                             <Image
-                              src={getConnectionIcon(c.type)}
+                              src={getConnectionIcon(c.type, c.icon)}
                               alt={c.type}
                               width={32}
                               height={32}
                               className="block w-full h-full object-cover"
                             />
                           </div>
-                          <div className="min-w-0">
-                            <div className="text-xs text-white truncate">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] sm:text-xs text-white truncate">
                               {c.name || c.id}
                             </div>
-                            <div className="text-[11px] text-zinc-300/80 truncate">
+                            <div className="text-[9px] sm:text-[11px] text-zinc-300/80 truncate">
                               {c.type}
                             </div>
                           </div>

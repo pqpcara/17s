@@ -109,6 +109,27 @@ function isGuildCreateData(data: unknown): data is GuildCreateData {
   );
 }
 
+function isUserUpdateData(data: unknown): data is {
+  user: {
+    id: string;
+    username: string;
+    global_name?: string;
+    avatar?: string | null;
+  };
+} {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "user" in data &&
+    typeof (data as Record<string, unknown>).user === "object" &&
+    (data as Record<string, unknown>).user !== null &&
+    "id" in (data as { user: Record<string, unknown> }).user &&
+    typeof (data as { user: Record<string, unknown> }).user.id === "string" &&
+    "username" in (data as { user: Record<string, unknown> }).user &&
+    typeof (data as { user: Record<string, unknown> }).user.username === "string"
+  );
+}
+
 function isGuildMembersChunkData(data: unknown): data is GuildMembersChunkData {
   return (
     typeof data === "object" &&
@@ -232,6 +253,24 @@ export class PresenceHub {
                 op: 8,
                 d: { guild_id: g.id, query: "", limit: 0, presences: true },
               });
+              break;
+            }
+
+            case "USER_UPDATE": {
+              if (!isUserUpdateData(payload.d)) return;
+              const user = payload.d.user;
+              const p: PresenceData = {
+                discord_status: this.cache.get(user.id)?.discord_status ?? "offline",
+                activities: this.cache.get(user.id)?.activities ?? [],
+                discord_user: {
+                  id: user.id,
+                  username: user.username,
+                  global_name: user.global_name,
+                  avatar: user.avatar,
+                },
+              };
+              this.cache.set(user.id, p);
+              this.listeners.forEach((fn) => fn(p));
               break;
             }
 
