@@ -1,8 +1,5 @@
 "use client";
 
-// Lanyard realtime presence via WebSocket (singleton)
-// Docs: https://github.com/Phineas/lanyard
-
 export type LanyardActivity = {
   url: string;
   buttons?: string[];
@@ -25,7 +22,13 @@ export type LanyardActivity = {
 };
 
 export type LanyardPresence = {
-  discord_user: { id: string; username: string; global_name?: string; avatar?: string | null };
+  discord_user: {
+    id: string;
+    username: string;
+    global_name?: string;
+    avatar?: string | null;
+    avatar_decoration_data?: { asset?: string | null } | null;
+  };
   discord_status: "online" | "idle" | "dnd" | "offline";
   listening_to_spotify: boolean;
   spotify?: {
@@ -50,7 +53,6 @@ class LanyardClient {
     ids.forEach((id) => this.subscribedIds.add(id));
     this.listeners.add(listener);
     this.ensureConnected();
-    // After connection/hello, we resubscribe with full set
     this.sendSubscribe();
 
     return () => {

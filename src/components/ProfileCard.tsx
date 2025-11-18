@@ -1,19 +1,75 @@
 import Image from "next/image";
 import Badge from "@/components/Badge";
 import StatusIndicator from "@/components/StatusIndicator";
-import { type PresenceData } from "@/lib/presence";
+import { type PresenceData, type AvatarDecorationData } from "@/lib/presence";
 import { getActivityIconAsset } from "@/lib/activityIcons";
 import { ReactNode } from "react";
 
-function extractImageUrl(url: string): string {
-  if (url.startsWith("mp:external/")) {
-    const parts = url.split("https/");
-    return "https://" + parts[1];
+type DecorationLike =
+  | AvatarDecorationData
+  | {
+      asset?: string | null;
+    }
+  | null
+  | undefined;
+
+function resolveActivityAssetUrl(
+  activity: PresenceData["activities"][number],
+): string | null {
+  const assetRef =
+    activity.assets?.large_image || activity.assets?.small_image || null;
+  if (!assetRef) return null;
+
+  const directUrl = normalizeAssetReference(assetRef, activity.application_id);
+  if (directUrl) return directUrl;
+
+  return null;
+}
+
+function getAvatarDecorationUrl(decoration: DecorationLike): string | null {
+  const assetId = decoration?.asset;
+  if (!assetId) return null;
+  return `https://cdn.discordapp.com/avatar-decoration-presets/${assetId}.png?size=320`;
+}
+
+function normalizeAssetReference(
+  raw: string,
+  applicationId?: string,
+): string | null {
+  if (!raw) return null;
+
+  if (raw.startsWith("spotify:")) {
+    const [, imageId] = raw.split(":");
+    if (imageId) return `https://i.scdn.co/image/${imageId}`;
   }
-  if (url.startsWith("spotify:")) {
-    return `https://i.scdn.co/image/${url.split(":")[1]}`;
+
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  if (raw.startsWith("mp:")) {
+    const httpsIndex = raw.indexOf("https/");
+    if (httpsIndex !== -1) {
+      return "https://" + raw.slice(httpsIndex + "https/".length);
+    }
+
+    const assetsMatch = raw.match(/^mp:assets-(\d+)\/(.+)$/i);
+    if (assetsMatch) {
+      const [, embeddedAppId, assetId] = assetsMatch;
+      return buildAppAssetUrl(embeddedAppId, assetId);
+    }
   }
-  return url;
+
+  if (applicationId) {
+    return buildAppAssetUrl(applicationId, raw.replace(/^mp:/, ""));
+  }
+
+  return null;
+}
+
+function buildAppAssetUrl(appId: string, assetId: string): string {
+  const normalizedAsset = assetId.includes(".")
+    ? assetId
+    : `${assetId}.png`;
+  return `https://cdn.discordapp.com/app-assets/${appId}/${normalizedAsset}`;
 }
 
 type DiscordBadge = { id: string; description?: string };
@@ -194,12 +250,16 @@ export type DiscordProfile = {
     username: string;
     global_name: string | null;
     avatar: string | null;
+    accent_color?: number | null;
+    avatar_decoration_data?: DecorationLike;
     discriminator: string;
     bio?: string;
   };
   user_profile: {
     bio?: string;
     pronouns?: string | "";
+    accent_color?: number | null;
+    theme_colors?: number[];
   };
   badges: DiscordBadge[];
   premium_type?: number;
@@ -242,19 +302,36 @@ export default function ProfileCard({
   const status: "online" | "idle" | "dnd" | "offline" =
     presence?.discord_status ?? "offline";
   const statusMaskOutline = "outline outline-2 outline-zinc-900";
+  const pronounsLabel =
+    user_profile.pronouns && user_profile.pronouns.trim().length
+      ? user_profile.pronouns.trim()
+      : null;
+  const decorationUrl = getAvatarDecorationUrl(
+    presence?.discord_user?.avatar_decoration_data ?? user.avatar_decoration_data,
+  );
 
   return (
     <div className="glass rounded-xl p-4 sm:p-5 w-full border border-white/10 shadow-xl hover:shadow-2xl transition-shadow max-w-full">
       <div className="flex items-center gap-3 sm:gap-4">
         <div className="relative flex-shrink-0">
           <Image
-            key={`avatar-${presenceUserId}-${avatarHash || 'default'}`}
+            key={`avatar-${presenceUserId}-${avatarHash || "default"}`}
             src={avatarUrl}
             alt={displayName}
             width={72}
             height={72}
             className="rounded-full border border-white/10 w-14 h-14 sm:w-[72px] sm:h-[72px]"
           />
+          {decorationUrl ? (
+            <Image
+              src={decorationUrl}
+              alt="Avatar decoration"
+              fill
+              sizes="80px"
+              className="absolute inset-0 z-20 pointer-events-none scale-[1.12] select-none"
+              style={{ objectFit: "contain" }}
+            />
+          ) : null}
           <span
             className={`absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 inline-flex items-center justify-center rounded-full ${statusMaskOutline} bg-zinc-900 pointer-events-none`}
             style={{ width: 18, height: 18 }}
@@ -263,15 +340,17 @@ export default function ProfileCard({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-white font-semibold truncate text-sm sm:text-base">{displayName}</h2>
-          <p className="text-xs text-zinc-400 truncate">
-            @{username}{" "}
-            {user_profile.pronouns !== "" && (
+          <h2 className="text-white font-semibold truncate text-sm sm:text-base">
+            {displayName}
+          </h2>
+          <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-zinc-300">
+            <span className="truncate text-zinc-300">@{username}</span>
+            {pronounsLabel ? (
               <>
-                <span className="text-zinc-300">| </span>
-                <span className="text-zinc-300">{user_profile.pronouns}</span>
+                <span className="text-zinc-500">•</span>
+                <span className="text-zinc-200">{pronounsLabel}</span>
               </>
-            )}
+            ) : null}
           </p>
         </div>
       </div>
@@ -283,10 +362,19 @@ export default function ProfileCard({
           ))}
         </div>
       ) : null}
-      {(user.bio || user_profile?.bio) ? (
+      {user.bio || user_profile?.bio ? (
         <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-zinc-300 line-clamp-3 leading-relaxed">
           {processBioText(user.bio || user_profile?.bio || "")}
         </p>
+      ) : null}
+
+      {presence?.listening_to_spotify && presence.spotify ? (
+        <div className="mt-3 sm:mt-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-emerald-200">
+              <span className="text-base leading-none">♪</span>
+          <span className="truncate">
+            {presence.spotify.song} · {presence.spotify.artist}
+          </span>
+        </div>
       ) : null}
 
       {presence?.activities?.length ? (
@@ -298,19 +386,19 @@ export default function ProfileCard({
             >
               <div className="h-8 w-8 sm:h-9 sm:w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
                 <Image
-                  src={extractImageUrl(
-                    activity.assets?.large_image ||
-                      activity.assets?.small_image ||
-                      getActivityIconAsset(activity) ||
-                      "/window.svg",
-                  )}
+                  src={
+                    resolveActivityAssetUrl(activity) ||
+                    getActivityIconAsset(activity) ||
+                    "/window.svg"
+                  }
                   alt={activity.name}
                   width={48}
                   height={48}
                   className="block w-full h-full object-cover"
                   loading="lazy"
                   onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "/window.svg";
+                    (e.currentTarget as HTMLImageElement).src =
+                      getActivityIconAsset(activity) || "/window.svg";
                   }}
                 />
               </div>
@@ -319,25 +407,23 @@ export default function ProfileCard({
                   {activity.name}
                 </div>
                 <div className="text-[10px] sm:text-xs text-zinc-300/80 truncate">
-                  {activity.details || activity.state || "Atividade"}
+                  {activity.details || activity.state || "Activity"}
                 </div>
               </div>
-              {onOpenModal && presence.activities.length > 2 && (
-                <button
-                  onClick={() =>
-                    onOpenModal({ activities: presence.activities })
-                  }
-                  className="ml-auto text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
-                >
-                  Ver mais
-                </button>
-              )}
             </div>
           ))}
+          {onOpenModal && presence.activities.length > 2 ? (
+            <button
+              onClick={() => onOpenModal({ activities: presence.activities })}
+              className="w-full text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
+            >
+              View more activities
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="mt-3 sm:mt-4 rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3 text-[10px] sm:text-xs text-zinc-400">
-          Nenhuma atividade
+          No activity
         </div>
       )}
 
@@ -348,7 +434,7 @@ export default function ProfileCard({
               (connection, index, arr) =>
                 arr.findIndex((c) => c.type === connection.type) === index,
             );
-            return uniqueConnections.slice(0, 2).map((c) => (
+            const rows = uniqueConnections.slice(0, 2).map((c) => (
               <div
                 key={`${c.type}:${c.id}`}
                 className="flex items-center gap-2 sm:gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
@@ -362,7 +448,8 @@ export default function ProfileCard({
                     className="block w-full h-full object-cover"
                     loading="lazy"
                     onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = getConnectionIcon(c.type);
+                      (e.currentTarget as HTMLImageElement).src =
+                        getConnectionIcon(c.type);
                     }}
                   />
                 </div>
@@ -371,24 +458,28 @@ export default function ProfileCard({
                     {c.name || c.id}
                   </div>
                   <div className="text-[10px] sm:text-xs text-zinc-300/80 truncate">
-                    Conexão
+                    Connection
                   </div>
                 </div>
-                {onOpenModal && uniqueConnections.length > 2 && (
-                  <button
-                    onClick={() =>
-                      onOpenModal({
-                        activities: presence?.activities ?? [],
-                        connections: uniqueConnections,
-                      })
-                    }
-                    className="ml-auto text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
-                  >
-                    Ver mais
-                  </button>
-                )}
               </div>
             ));
+            if (onOpenModal && uniqueConnections.length > 2 && rows.length) {
+              rows.push(
+                <button
+                  key="connections-more"
+                  onClick={() =>
+                    onOpenModal({
+                      activities: presence?.activities ?? [],
+                      connections: uniqueConnections,
+                    })
+                  }
+                  className="w-full text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
+                >
+                  View more connections
+                </button>,
+              );
+            }
+            return rows;
           })()}
         </div>
       ) : null}

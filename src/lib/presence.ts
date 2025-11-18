@@ -22,12 +22,19 @@ export type PresenceActivity = {
   url?: string;
 };
 
+export type AvatarDecorationData = {
+  asset?: string | null;
+  sku_id?: string;
+  expires_at?: string | null;
+};
+
 export type PresenceData = {
   discord_user: {
     id: string;
     username: string;
     global_name?: string;
     avatar?: string | null;
+    avatar_decoration_data?: AvatarDecorationData | null;
   };
   discord_status: "online" | "idle" | "dnd" | "offline";
   activities: PresenceActivity[];
@@ -98,6 +105,7 @@ function mapLanyardPresenceToPresenceData(lp: LanyardPresence): PresenceData {
       username: lp.discord_user.username,
       global_name: lp.discord_user.global_name,
       avatar: lp.discord_user.avatar ?? null,
+      avatar_decoration_data: lp.discord_user.avatar_decoration_data ?? null,
     },
     discord_status: lp.discord_status,
     activities: (lp.activities || []).map((a: LanyardActivity) => ({

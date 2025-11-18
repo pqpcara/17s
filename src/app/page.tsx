@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ProfileCard, { type DiscordProfile } from "@/components/ProfileCard";
 import { subscribePresence, type PresenceData } from "@/lib/presence";
 import Image from "next/image";
@@ -54,6 +54,30 @@ export default function Home() {
     }[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [volume, setVolume] = useState(35);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const trackMeta = {
+    title: "Midnight Slowed",
+    subtitle: "17s Spotify",
+  };
+
+  const ensureAudio = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio("/midnight.mp3");
+      audioRef.current.loop = true;
+      audioRef.current.volume = volume / 100;
+    }
+    return audioRef.current;
+  };
+
+  const handleEnter = () => {
+    ensureAudio()
+      .play()
+      .then(() => setMusicEnabled(true))
+      .catch(() => setMusicEnabled(false));
+    setEntered(true);
+  };
 
   useEffect(() => {
     if (!entered) return;
@@ -66,13 +90,13 @@ export default function Home() {
             });
             if (res.status === 403) {
               const body = await res.text().catch(() => "");
-              const msg = `Discord API 403. Verifique token no servidor (BOT_TOKEN) e permissões. Resposta: ${body || res.statusText}`;
+              const msg = `Discord API 403. Check BOT_TOKEN and required permissions on the server. Response: ${body || res.statusText}`;
               throw new Error(msg);
             }
             if (!res.ok) {
               const body = await res.text().catch(() => "");
               throw new Error(
-                `Erro ao buscar usuário ${id}: ${res.status} ${body || res.statusText}`,
+                `Failed to fetch user ${id}: ${res.status} ${body || res.statusText}`,
               );
             }
             return [id, (await res.json()) as DiscordProfile] as const;
@@ -96,43 +120,124 @@ export default function Home() {
     return () => unsubscribe();
   }, [entered, ids]);
 
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!entered) return;
+    const audio = ensureAudio();
+    if (musicEnabled) {
+      audio.play().catch(() => setMusicEnabled(false));
+    } else {
+      audio.pause();
+    }
+  }, [entered, musicEnabled]);
+
+  useEffect(() => {
+    if (!entered) return;
+    const audio = ensureAudio();
+    audio.volume = volume / 100;
+  }, [entered, volume]);
+
   return (
-    <div className="min-h-screen w-full bg-black/90 flex items-center justify-center p-3 sm:p-4 md:p-6 relative overflow-hidden">
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#04030c] text-white">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-purple-600/25 blur-[140px]" />
+        <div className="absolute -right-20 bottom-0 h-[420px] w-[420px] rounded-full bg-indigo-500/20 blur-[180px]" />
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0)",
+            backgroundSize: "140px 140px",
+          }}
+        />
+      </div>
+
       {!entered ? (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 px-6 backdrop-blur">
           <button
-            onClick={() => setEntered(true)}
+            onClick={handleEnter}
             className="px-4 sm:px-6 py-2 sm:py-3 rounded-xl bg-black text-white text-sm sm:text-base font-medium shadow-lg hover:bg-purple-500 transition"
           >
-            Clique para entrar
+            Enter
           </button>
         </div>
       ) : null}
 
       <div
-        className={`w-full transition-opacity ${entered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`relative z-10 flex w-full flex-col gap-6 pb-10 pt-8 transition-opacity duration-700 ${entered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
+        {entered ? (
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_20px_45px_rgba(0,0,0,0.4)] backdrop-blur">
+              <button
+                onClick={() => setMusicEnabled((prev) => !prev)}
+                className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-white/20 bg-black/40 text-lg text-white shadow-lg transition hover:scale-105"
+                aria-label={musicEnabled ? "Pause music" : "Play music"}
+              >
+                {musicEnabled ? "⏸" : "▶"}
+              </button>
+              <div className="min-w-[160px]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-white/60">
+                  Ambient track
+                </p>
+                <p className="text-sm font-medium text-white">{trackMeta.title}</p>
+                <p className="text-[11px] text-white/60">
+                  {musicEnabled ? "Playing" : "Paused"} · {trackMeta.subtitle}
+                </p>
+              </div>
+              <div className="flex flex-1 items-center gap-3">
+                <span className="text-[11px] uppercase tracking-wide text-white/60">
+                  Volume
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={volume}
+                  onChange={(event) => setVolume(Number(event.target.value))}
+                  className="flex-1 accent-fuchsia-400"
+                  aria-label="Controle de volume"
+                />
+                <span className="w-10 text-right text-xs font-semibold text-white">
+                  {volume}%
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {error ? (
-          <div className="text-red-400 text-xs sm:text-sm break-all mb-3 sm:mb-4 max-w-7xl mx-auto">{error}</div>
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100 shadow-lg">
+              {error}
+            </div>
+          </div>
         ) : null}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 items-start w-full max-w-7xl mx-auto">
+        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-2 xl:grid-cols-4 lg:px-8">
           {ids.map((id) => {
             const p = profiles[id];
             if (!p) {
               return (
                 <div
                   key={id}
-                  className="glass rounded-xl p-4 sm:p-5 w-full border border-white/10 animate-pulse"
+                  className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 backdrop-blur-xl"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="h-14 w-14 sm:h-[72px] sm:w-[72px] rounded-full bg-zinc-800 flex-shrink-0" />
-                    <div className="flex-1 space-y-2 min-w-0">
-                      <div className="h-4 w-32 sm:w-40 bg-zinc-800 rounded" />
-                      <div className="h-3 w-20 sm:w-24 bg-zinc-800 rounded" />
+                    <div className="h-14 w-14 rounded-full bg-white/10 sm:h-[72px] sm:w-[72px]" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-32 rounded bg-white/10 sm:w-40" />
+                      <div className="h-3 w-24 rounded bg-white/10 sm:w-28" />
                     </div>
                   </div>
-                  <div className="mt-3 sm:mt-4 h-8 bg-zinc-900/50 rounded" />
+                  <div className="mt-4 h-9 rounded bg-white/5" />
                 </div>
               );
             }
@@ -146,45 +251,46 @@ export default function Home() {
             );
           })}
         </div>
+
         {modal ? (
           <div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center p-3 sm:p-4 z-50"
+            className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4 backdrop-blur"
             onClick={() => setModal(null)}
           >
             <div
-              className="glass rounded-xl p-4 sm:p-5 w-full max-w-md border border-white/10 max-h-[90vh] flex flex-col"
+              className="w-full max-w-md rounded-2xl border border-white/10 bg-black/80 p-4 sm:p-5 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                <h3 className="text-white font-semibold text-sm sm:text-base">Atividades</h3>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-white">Activities</h3>
                 <button
-                  className="text-zinc-300 hover:text-white text-sm sm:text-base"
+                  className="text-sm text-zinc-300 transition hover:text-white"
                   onClick={() => setModal(null)}
                 >
-                  Fechar
+                  Close
                 </button>
               </div>
-              <div className="space-y-2 sm:space-y-3 max-h-[60vh] overflow-y-auto flex-1">
+              <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
                 {modal.activities.map((a) => (
                   <div
                     key={a.id}
-                    className="rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3"
+                    className="rounded-xl border border-white/10 bg-white/5 p-3"
                   >
-                    <div className="text-xs sm:text-sm text-white">{a.name}</div>
-                    <div className="text-[10px] sm:text-xs text-zinc-300/80">
-                      {a.details || a.state || "Atividade"}
+                    <div className="text-sm font-medium text-white">{a.name}</div>
+                    <div className="text-[11px] text-zinc-300">
+                      {a.details || a.state || "Activity"}
                     </div>
                     {a.assets?.large_image ? (
-                      <div className="mt-2 text-[10px] sm:text-xs text-zinc-400">
+                      <div className="mt-2 text-[11px] text-zinc-400">
                         {a.assets.large_text}
                       </div>
                     ) : null}
                     {a.buttons?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         {a.buttons.map((b, i) => (
                           <span
                             key={i}
-                            className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 text-zinc-200"
+                            className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] text-zinc-100"
                           >
                             {b}
                           </span>
@@ -194,30 +300,23 @@ export default function Home() {
                   </div>
                 ))}
                 {modal.connections?.length ? (
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3">
-                    <div className="text-xs sm:text-sm text-white mb-2">Conexões</div>
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    <div className="mb-2 text-sm font-medium text-white">Connections</div>
                     <div className="space-y-2">
                       {modal.connections.map((c) => (
-                        <div
-                          key={`${c.type}:${c.id}`}
-                          className="flex items-center gap-2 sm:gap-3"
-                        >
-                          <div className="h-7 w-7 sm:h-8 sm:w-8 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div key={`${c.type}:${c.id}`} className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded bg-white/10">
                             <Image
                               src={getConnectionIcon(c.type, c.icon)}
                               alt={c.type}
                               width={32}
                               height={32}
-                              className="block w-full h-full object-cover"
+                              className="h-full w-full object-cover"
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-[10px] sm:text-xs text-white truncate">
-                              {c.name || c.id}
-                            </div>
-                            <div className="text-[9px] sm:text-[11px] text-zinc-300/80 truncate">
-                              {c.type}
-                            </div>
+                            <div className="text-xs text-white">{c.name || c.id}</div>
+                            <div className="text-[10px] text-zinc-400">{c.type}</div>
                           </div>
                         </div>
                       ))}
