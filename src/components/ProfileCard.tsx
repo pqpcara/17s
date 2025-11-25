@@ -8,8 +8,8 @@ import { ReactNode } from "react";
 type DecorationLike =
   | AvatarDecorationData
   | {
-      asset?: string | null;
-    }
+    asset?: string | null;
+  }
   | null
   | undefined;
 
@@ -120,7 +120,7 @@ function processBioText(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const emojiRegex = /<(a?):(\w+):(\d+)>/g;
-  
+
   type MatchData = {
     type: 'emoji' | 'url';
     start: number;
@@ -133,9 +133,9 @@ function processBioText(text: string): ReactNode[] {
       url?: string;
     };
   };
-  
+
   const allMatches: MatchData[] = [];
-  
+
   let match: RegExpExecArray | null;
   while ((match = emojiRegex.exec(text)) !== null) {
     allMatches.push({
@@ -150,15 +150,15 @@ function processBioText(text: string): ReactNode[] {
       }
     });
   }
-  
+
   urlRegex.lastIndex = 0;
   while ((match = urlRegex.exec(text)) !== null) {
     const matchIndex = match.index;
     const matchLength = match[0].length;
-    const isInsideEmoji = allMatches.some(m => 
+    const isInsideEmoji = allMatches.some(m =>
       m.type === 'emoji' && matchIndex >= m.start && matchIndex < m.end
     );
-    const overlapsMatch = allMatches.some(m => 
+    const overlapsMatch = allMatches.some(m =>
       (matchIndex >= m.start && matchIndex < m.end) ||
       (m.start >= matchIndex && m.start < matchIndex + matchLength)
     );
@@ -171,15 +171,15 @@ function processBioText(text: string): ReactNode[] {
       });
     }
   }
-  
+
   allMatches.sort((a, b) => {
     if (a.start !== b.start) return a.start - b.start;
     return a.type === 'emoji' ? -1 : 1;
   });
-  
+
   const filteredMatches: MatchData[] = [];
   for (const match of allMatches) {
-    const isInsideOther = filteredMatches.some(m => 
+    const isInsideOther = filteredMatches.some(m =>
       match.start >= m.start && match.end <= m.end &&
       !(match.start === m.start && match.end === m.end)
     );
@@ -187,9 +187,9 @@ function processBioText(text: string): ReactNode[] {
       filteredMatches.push(match);
     }
   }
-  
+
   let currentIndex = 0;
-  
+
   for (const item of filteredMatches) {
     if (item.start > currentIndex) {
       const beforeText = text.slice(currentIndex, item.start);
@@ -197,7 +197,7 @@ function processBioText(text: string): ReactNode[] {
         parts.push(<span key={`text-${currentIndex}`}>{beforeText}</span>);
       }
     }
-    
+
     if (item.type === 'emoji') {
       const emojiUrl = item.data.animated
         ? `https://cdn.discordapp.com/emojis/${item.data.id}.gif`
@@ -226,21 +226,21 @@ function processBioText(text: string): ReactNode[] {
         </a>
       );
     }
-    
+
     currentIndex = item.end;
   }
-  
+
   if (currentIndex < text.length) {
     const remainingText = text.slice(currentIndex);
     if (remainingText) {
       parts.push(<span key={`text-${currentIndex}`}>{remainingText}</span>);
     }
   }
-  
+
   if (parts.length === 0) {
     return [<span key="text-0">{text}</span>];
   }
-  
+
   return parts;
 }
 
@@ -286,19 +286,19 @@ export default function ProfileCard({
 }) {
   const { user, user_profile, badges } = profile;
 
-  const displayName = presence?.discord_user?.global_name 
-    ?? presence?.discord_user?.username 
-    ?? user.global_name 
+  const displayName = presence?.discord_user?.global_name
+    ?? presence?.discord_user?.username
+    ?? user.global_name
     ?? user.username;
-  
+
   const username = presence?.discord_user?.username ?? user.username;
-  
+
   const presenceUserId = presence?.discord_user?.id ?? user.id;
   const avatarHash = presence?.discord_user?.avatar ?? user.avatar;
   const avatarUrl = avatarHash
     ? `https://cdn.discordapp.com/avatars/${presenceUserId}/${avatarHash}.png?size=256`
     : `https://cdn.discordapp.com/embed/avatars/${parseInt(presenceUserId) % 5}.png`;
-  
+
   const status: "online" | "idle" | "dnd" | "offline" =
     presence?.discord_status ?? "offline";
   const statusMaskOutline = "outline outline-2 outline-zinc-900";
@@ -370,7 +370,7 @@ export default function ProfileCard({
 
       {presence?.listening_to_spotify && presence.spotify ? (
         <div className="mt-3 sm:mt-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-emerald-200">
-              <span className="text-base leading-none">♪</span>
+          <span className="text-base leading-none">♪</span>
           <span className="truncate">
             {presence.spotify.song} · {presence.spotify.artist}
           </span>
@@ -429,58 +429,48 @@ export default function ProfileCard({
 
       {profile.connected_accounts?.length ? (
         <div className="mt-3 sm:mt-4 space-y-2">
-          {(() => {
-            const uniqueConnections = profile.connected_accounts.filter(
-              (connection, index, arr) =>
-                arr.findIndex((c) => c.type === connection.type) === index,
-            );
-            const rows = uniqueConnections.slice(0, 2).map((c) => (
-              <div
-                key={`${c.type}:${c.id}`}
-                className="flex items-center gap-2 sm:gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
-              >
-                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <Image
-                    src={getConnectionIcon(c.type, c.icon)}
-                    alt={c.type}
-                    width={48}
-                    height={48}
-                    className="block w-full h-full object-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src =
-                        getConnectionIcon(c.type);
-                    }}
-                  />
+          {profile.connected_accounts.slice(0, 2).map((c, index) => (
+            <div
+              key={`${c.type}:${c.id}:${index}`}  // Modificação para garantir a chave única, incluindo o índice
+              className="flex items-center gap-2 sm:gap-3 rounded-lg border border-white/10 bg-white/5 p-2"
+            >
+              <div className="h-8 w-8 sm:h-9 sm:w-9 rounded bg-zinc-800/60 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <Image
+                  src={getConnectionIcon(c.type, c.icon)}
+                  alt={c.type}
+                  width={48}
+                  height={48}
+                  className="block w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src =
+                      getConnectionIcon(c.type);
+                  }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs sm:text-sm text-white truncate">
+                  {c.name || c.id}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm text-white truncate">
-                    {c.name || c.id}
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-zinc-300/80 truncate">
-                    Connection
-                  </div>
+                <div className="text-[10px] sm:text-xs text-zinc-300/80 truncate">
+                  Connection
                 </div>
               </div>
-            ));
-            if (onOpenModal && uniqueConnections.length > 2 && rows.length) {
-              rows.push(
-                <button
-                  key="connections-more"
-                  onClick={() =>
-                    onOpenModal({
-                      activities: presence?.activities ?? [],
-                      connections: uniqueConnections,
-                    })
-                  }
-                  className="w-full text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
-                >
-                  View more connections
-                </button>,
-              );
-            }
-            return rows;
-          })()}
+            </div>
+          ))}
+          {onOpenModal && profile.connected_accounts.length > 2 && (
+            <button
+              onClick={() =>
+                onOpenModal({
+                  activities: presence?.activities ?? [],
+                  connections: profile.connected_accounts,
+                })
+              }
+              className="w-full text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-zinc-200 flex-shrink-0"
+            >
+              View more connections
+            </button>
+          )}
         </div>
       ) : null}
     </div>
